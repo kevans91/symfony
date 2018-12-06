@@ -111,4 +111,92 @@ class AdapterTest extends LdapTestCase
         $this->assertEquals($one_level_result->count(), 1);
         $this->assertEquals($one_level_result[0]->getAttribute('ou'), array('Ldap'));
     }
+
+    public function testLdapPagination()
+    {
+        $ldap = new Adapter($this->getLdapConfig());
+
+        $ldap->getConnection()->bind('cn=admin,dc=symfony,dc=com', 'symfony');
+
+        // Create 25 'users' that we'll query for in different page sizes
+        $em = $ldap->getEntryManager();
+        for ($i = 0; $i < 25; ++$i) {
+            $cn = sprintf('user%d', $i);
+            $entry = new Entry(sprintf('cn=%s,dc=symfony,dc=com', $cn));
+            $entry->setAttribute('objectClass', array('top', 'organizationalPerson'));
+            $entry->setAttribute('cn', $cn);
+            $em->add($entry);
+        }
+
+        $unpaged_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=organizationalPerson)(cn=user*))', array(
+            'scope' => Query::SCOPE_ONE,
+        ));
+        $fully_paged_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=organizationalPerson)(cn=user*))', array(
+            'scope' => Query::SCOPE_ONE,
+            'pageSize' => 25,
+        ));
+        $paged_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=organizationalPerson)(cn=user*))', array(
+            'scope' => Query::SCOPE_ONE,
+            'pageSize' => 5,
+        ));
+
+        // This last query is to ensure that we haven't botched the state of our connection by not resetting pagination properly
+        $final_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=organizationalPerson)(cn=user*))', array(
+            'scope' => Query::SCOPE_ONE,
+        ));
+
+        $unpaged_results = $unpaged_query->execute();
+        $fully_paged_results = $fully_paged_query->execute();
+        $paged_results = $paged_query->execute();
+        $final_results = $final_query->execute();
+
+        // All four of the above queries should result in the 25 'users' being returned
+        $this->assertEquals($unpaged_results->count(), 25);
+        $this->assertEquals($fully_paged_results->count(), 25);
+        $this->assertEquals($paged_results->count(), 25);
+        $this->assertEquals($final_results->count(), 25);
+
+        // They should also result in 1 or 25 / pageSize results
+        $this->assertEquals(count($unpaged_query->getResources()), 1);
+        $this->assertEquals(count($fully_paged_query->getResources()), 1);
+        $this->assertEquals(count($paged_query->getResources()), 5);
+        $this->assertEquals(count($final_query->getResources()), 1);
+    }
+
+    public function testLdapPagination()
+    {
+        $ldap = new Adapter($this->getLdapConfig());
+
+        $ldap->getConnection()->bind('cn=admin,dc=symfony,dc=com', 'symfony');
+
+        // Create 25 'users' that we'll query for in different page sizes
+        $em = $ldap->getEntryManager();
+        for ($i = 0; $i < 25; ++$i) {
+            $cn = sprintf('user%d', $i);
+            $entry = new Entry(sprintf('cn=%s,dc=symfony,dc=com', $cn));
+            $entry->setAttribute('objectClass', array('top', 'organizationalPerson'));
+            $entry->setAttribute('cn', $cn);
+            $em->add($entry);
+        }
+
+        $low_max_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=organizationalPerson)(cn=user*))', array(
+            'scope' => Query::SCOPE_ONE,
+            'pageSize' => 10,
+            'maxItems' => 5,
+        ));
+        $high_max_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=organizationalPerson)(cn=user*))', array(
+            'scope' => Query::SCOPE_ONE,
+            'pageSize' => 10,
+            'maxItems' => 13,
+        ));
+
+        $low_max_results = $low_max_query->execute();
+        $high_max_results = $high_max_query->execute();
+
+        $this->assertEquals($low_max_results->count(), 5);
+        $this->assertEquals($high_max_results->count(), 13);
+
+        $this->assertEquals(count($low_max_query->getResources()), 1);
+        $this->assertEquals(count($high_max_query->getResources()), 2);
+    }
 }
