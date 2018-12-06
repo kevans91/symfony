@@ -155,7 +155,7 @@ class Query extends AbstractQuery
      */
     public function getResource($idx = 0)
     {
-        if (null === $this->results || $idx >= count($this->results)) {
+        if (null === $this->results || $idx >= \count($this->results)) {
             return null;
         } else {
             return $this->results[$idx];

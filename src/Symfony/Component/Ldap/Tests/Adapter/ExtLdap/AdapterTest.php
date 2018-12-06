@@ -157,10 +157,10 @@ class AdapterTest extends LdapTestCase
         $this->assertEquals($final_results->count(), 25);
 
         // They should also result in 1 or 25 / pageSize results
-        $this->assertEquals(count($unpaged_query->getResources()), 1);
-        $this->assertEquals(count($fully_paged_query->getResources()), 1);
-        $this->assertEquals(count($paged_query->getResources()), 5);
-        $this->assertEquals(count($final_query->getResources()), 1);
+        $this->assertEquals(\count($unpaged_query->getResources()), 1);
+        $this->assertEquals(\count($fully_paged_query->getResources()), 1);
+        $this->assertEquals(\count($paged_query->getResources()), 5);
+        $this->assertEquals(\count($final_query->getResources()), 1);
     }
 
     public function testLdapPagination()
@@ -196,7 +196,7 @@ class AdapterTest extends LdapTestCase
         $this->assertEquals($low_max_results->count(), 5);
         $this->assertEquals($high_max_results->count(), 13);
 
-        $this->assertEquals(count($low_max_query->getResources()), 1);
-        $this->assertEquals(count($high_max_query->getResources()), 2);
+        $this->assertEquals(\count($low_max_query->getResources()), 1);
+        $this->assertEquals(\count($high_max_query->getResources()), 2);
     }
 }
