@@ -16,6 +16,7 @@ use Symfony\Component\Ldap\Adapter\ExtLdap\Collection;
 use Symfony\Component\Ldap\Adapter\ExtLdap\Query;
 use Symfony\Component\Ldap\Entry;
 use Symfony\Component\Ldap\Exception\NotBoundException;
+use Symfony\Component\Ldap\Exception\LdapException;
 use Symfony\Component\Ldap\LdapInterface;
 
 /**
@@ -116,7 +117,7 @@ class AdapterTest extends LdapTestCase
     {
         $ldap = new Adapter($this->getLdapConfig());
         $ldap->getConnection()->bind('cn=admin,dc=symfony,dc=com', 'symfony');
-		//$entries = $this->setupTestUsers($ldap);
+		$entries = $this->setupTestUsers($ldap);
 
         $unpaged_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=applicationProcess)(cn=user*))', array(
             'scope' => Query::SCOPE_ONE,
@@ -166,7 +167,12 @@ class AdapterTest extends LdapTestCase
             $entry = new Entry(sprintf('cn=%s,dc=symfony,dc=com', $cn));
             $entry->setAttribute('objectClass', array('applicationProcess'));
             $entry->setAttribute('cn', array($cn));
-            $em->add($entry);
+			try {
+            	$em->add($entry);
+			}
+			catch (LdapException $exc) {
+				// ignored
+			}
 			$entries[] = $entry;
         }
 
