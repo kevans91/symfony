@@ -11,6 +11,9 @@ class LdapTestCase extends TestCase
         return array(
             'host' => getenv('LDAP_HOST'),
             'port' => getenv('LDAP_PORT'),
+			'options' => array(
+				'protocol_version' => 3,
+			),
         );
     }
 }

@@ -115,33 +115,23 @@ class AdapterTest extends LdapTestCase
     public function testLdapPagination()
     {
         $ldap = new Adapter($this->getLdapConfig());
-
         $ldap->getConnection()->bind('cn=admin,dc=symfony,dc=com', 'symfony');
+		//$entries = $this->setupTestUsers($ldap);
 
-        // Create 25 'users' that we'll query for in different page sizes
-        $em = $ldap->getEntryManager();
-        for ($i = 0; $i < 25; ++$i) {
-            $cn = sprintf('user%d', $i);
-            $entry = new Entry(sprintf('cn=%s,dc=symfony,dc=com', $cn));
-            $entry->setAttribute('objectClass', array('top', 'organizationalPerson'));
-            $entry->setAttribute('cn', $cn);
-            $em->add($entry);
-        }
-
-        $unpaged_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=organizationalPerson)(cn=user*))', array(
+        $unpaged_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=applicationProcess)(cn=user*))', array(
             'scope' => Query::SCOPE_ONE,
         ));
-        $fully_paged_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=organizationalPerson)(cn=user*))', array(
+        $fully_paged_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=applicationProcess)(cn=user*))', array(
             'scope' => Query::SCOPE_ONE,
             'pageSize' => 25,
         ));
-        $paged_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=organizationalPerson)(cn=user*))', array(
+        $paged_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=applicationProcess)(cn=user*))', array(
             'scope' => Query::SCOPE_ONE,
             'pageSize' => 5,
         ));
 
         // This last query is to ensure that we haven't botched the state of our connection by not resetting pagination properly
-        $final_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=organizationalPerson)(cn=user*))', array(
+        $final_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=applicationProcess)(cn=user*))', array(
             'scope' => Query::SCOPE_ONE,
         ));
 
@@ -161,30 +151,52 @@ class AdapterTest extends LdapTestCase
         $this->assertEquals(\count($fully_paged_query->getResources()), 1);
         $this->assertEquals(\count($paged_query->getResources()), 5);
         $this->assertEquals(\count($final_query->getResources()), 1);
+
+		$this->destroyEntries($ldap, $entries);
     }
 
-    public function testLdapPagination()
-    {
-        $ldap = new Adapter($this->getLdapConfig());
-
-        $ldap->getConnection()->bind('cn=admin,dc=symfony,dc=com', 'symfony');
+	private function setupTestUsers($ldap)
+	{
+		$entries = array();
 
         // Create 25 'users' that we'll query for in different page sizes
         $em = $ldap->getEntryManager();
         for ($i = 0; $i < 25; ++$i) {
             $cn = sprintf('user%d', $i);
             $entry = new Entry(sprintf('cn=%s,dc=symfony,dc=com', $cn));
-            $entry->setAttribute('objectClass', array('top', 'organizationalPerson'));
-            $entry->setAttribute('cn', $cn);
+            $entry->setAttribute('objectClass', array('applicationProcess'));
+            $entry->setAttribute('cn', array($cn));
             $em->add($entry);
+			$entries[] = $entry;
         }
 
-        $low_max_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=organizationalPerson)(cn=user*))', array(
+		return $entries;
+	}
+
+	private function destroyEntries($entries)
+	{
+        $ldap = new Adapter($this->getLdapConfig());
+        $ldap->getConnection()->bind('cn=admin,dc=symfony,dc=com', 'symfony');
+        $em = $ldap->getEntryManager();
+		foreach ($entries as $entry) {
+			$em->remove($entry);
+		}
+	}
+
+    public function testLdapPaginationLimits()
+    {
+
+        $ldap = new Adapter($this->getLdapConfig());
+        $ldap->getConnection()->bind('cn=admin,dc=symfony,dc=com', 'symfony');
+
+		$entries = $this->setupTestUsers($ldap);
+
+        $low_max_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=applicationProcess)(cn=user*))', array(
             'scope' => Query::SCOPE_ONE,
             'pageSize' => 10,
             'maxItems' => 5,
         ));
-        $high_max_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=organizationalPerson)(cn=user*))', array(
+        $high_max_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=applicationProcess)(cn=user*))', array(
             'scope' => Query::SCOPE_ONE,
             'pageSize' => 10,
             'maxItems' => 13,
@@ -198,5 +210,7 @@ class AdapterTest extends LdapTestCase
 
         $this->assertEquals(\count($low_max_query->getResources()), 1);
         $this->assertEquals(\count($high_max_query->getResources()), 2);
+
+		$this->destroyEntries($entries);
     }
 }

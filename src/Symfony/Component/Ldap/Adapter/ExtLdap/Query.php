@@ -92,10 +92,10 @@ class Query extends AbstractQuery
             }
             $pageControl = $this->options['scope'] != static::SCOPE_BASE && $pageSize > 0;
             $cookie = $lastCookie = '';
-            $pageCount = 0;
 
             do {
                 if ($pageControl) {
+					var_dump($pageSize);
                     ldap_control_paged_result($con, $pageSize, true, $cookie);
                 }
 
