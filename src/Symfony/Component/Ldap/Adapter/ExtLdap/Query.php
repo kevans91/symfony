@@ -82,8 +82,7 @@ class Query extends AbstractQuery
                     throw new LdapException(sprintf('Could not search in scope "%s".', $this->options['scope']));
             }
 
-            $maxItems = $this->options['maxItems'];
-            $itemsLeft = $maxItems;
+            $itemsLeft = $maxItems = $this->options['maxItems'];
             $pageSize = $this->options['pageSize'];
             if (0 !== $maxItems && $pageSize > $maxItems) {
                 $pageSize = 0;
@@ -91,16 +90,13 @@ class Query extends AbstractQuery
                 $pageSize = min($maxItems, $pageSize);
             }
             $pageControl = $this->options['scope'] != static::SCOPE_BASE && $pageSize > 0;
-            $cookie = $lastCookie = '';
-
+            $cookie = '';
             do {
                 if ($pageControl) {
-					var_dump($pageSize);
                     ldap_control_paged_result($con, $pageSize, true, $cookie);
                 }
-
                 $sizeLimit = $itemsLeft;
-                if ($sizeLimit >= $pageSize) {
+                if ($pageSize > 0 && $sizeLimit >= $pageSize) {
                     $sizeLimit = 0;
                 }
                 $search = @$func(
