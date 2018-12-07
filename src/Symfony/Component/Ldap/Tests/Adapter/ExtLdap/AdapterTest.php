@@ -15,6 +15,7 @@ use Symfony\Component\Ldap\Adapter\ExtLdap\Adapter;
 use Symfony\Component\Ldap\Adapter\ExtLdap\Collection;
 use Symfony\Component\Ldap\Adapter\ExtLdap\Query;
 use Symfony\Component\Ldap\Entry;
+use Symfony\Component\Ldap\Exception\LdapException;
 use Symfony\Component\Ldap\Exception\NotBoundException;
 use Symfony\Component\Ldap\LdapInterface;
 
@@ -23,6 +24,12 @@ use Symfony\Component\Ldap\LdapInterface;
  */
 class AdapterTest extends LdapTestCase
 {
+    const PAGINATION_REQUIRED_CONFIG = array(
+        'options' => array(
+            'protocol_version' => 3,
+        ),
+    );
+
     public function testLdapEscape()
     {
         $ldap = new Adapter();
@@ -110,5 +117,116 @@ class AdapterTest extends LdapTestCase
         $this->assertNotEquals($one_level_result->count(), $subtree_count);
         $this->assertEquals($one_level_result->count(), 1);
         $this->assertEquals($one_level_result[0]->getAttribute('ou'), array('Ldap'));
+    }
+
+    public function testLdapPagination()
+    {
+        $ldap = new Adapter(array_merge($this->getLdapConfig(), static::PAGINATION_REQUIRED_CONFIG));
+        $ldap->getConnection()->bind('cn=admin,dc=symfony,dc=com', 'symfony');
+        $entries = $this->setupTestUsers($ldap);
+
+        $unpaged_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=applicationProcess)(cn=user*))', array(
+            'scope' => Query::SCOPE_ONE,
+        ));
+        $fully_paged_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=applicationProcess)(cn=user*))', array(
+            'scope' => Query::SCOPE_ONE,
+            'pageSize' => 25,
+        ));
+        $paged_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=applicationProcess)(cn=user*))', array(
+            'scope' => Query::SCOPE_ONE,
+            'pageSize' => 5,
+        ));
+
+        // This last query is to ensure that we haven't botched the state of our connection by not resetting pagination properly
+        $final_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=applicationProcess)(cn=user*))', array(
+            'scope' => Query::SCOPE_ONE,
+        ));
+
+        try {
+            $unpaged_results = $unpaged_query->execute();
+            $fully_paged_results = $fully_paged_query->execute();
+            $paged_results = $paged_query->execute();
+            $final_results = $final_query->execute();
+
+            // All four of the above queries should result in the 25 'users' being returned
+            $this->assertEquals($unpaged_results->count(), 25);
+            $this->assertEquals($fully_paged_results->count(), 25);
+            $this->assertEquals($paged_results->count(), 25);
+            $this->assertEquals($final_results->count(), 25);
+
+            // They should also result in 1 or 25 / pageSize results
+            $this->assertEquals(\count($unpaged_query->getResources()), 1);
+            $this->assertEquals(\count($fully_paged_query->getResources()), 1);
+            $this->assertEquals(\count($paged_query->getResources()), 5);
+            $this->assertEquals(\count($final_query->getResources()), 1);
+        } catch (LdapException $exc) {
+            $this->markTestSkipped('Test LDAP server does not support pagination');
+        }
+
+        $this->destroyEntries($ldap, $entries);
+    }
+
+    private function setupTestUsers($ldap)
+    {
+        $entries = array();
+
+        // Create 25 'users' that we'll query for in different page sizes
+        $em = $ldap->getEntryManager();
+        for ($i = 0; $i < 25; ++$i) {
+            $cn = sprintf('user%d', $i);
+            $entry = new Entry(sprintf('cn=%s,dc=symfony,dc=com', $cn));
+            $entry->setAttribute('objectClass', array('applicationProcess'));
+            $entry->setAttribute('cn', array($cn));
+            try {
+                $em->add($entry);
+            } catch (LdapException $exc) {
+                // ignored
+            }
+            $entries[] = $entry;
+        }
+
+        return $entries;
+    }
+
+    private function destroyEntries($ldap, $entries)
+    {
+        $em = $ldap->getEntryManager();
+        foreach ($entries as $entry) {
+            $em->remove($entry);
+        }
+    }
+
+    public function testLdapPaginationLimits()
+    {
+        $ldap = new Adapter(array_merge($this->getLdapConfig(), static::PAGINATION_REQUIRED_CONFIG));
+        $ldap->getConnection()->bind('cn=admin,dc=symfony,dc=com', 'symfony');
+
+        $entries = $this->setupTestUsers($ldap);
+
+        $low_max_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=applicationProcess)(cn=user*))', array(
+            'scope' => Query::SCOPE_ONE,
+            'pageSize' => 10,
+            'maxItems' => 5,
+        ));
+        $high_max_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=applicationProcess)(cn=user*))', array(
+            'scope' => Query::SCOPE_ONE,
+            'pageSize' => 10,
+            'maxItems' => 13,
+        ));
+
+        try {
+            $low_max_results = $low_max_query->execute();
+            $high_max_results = $high_max_query->execute();
+
+            $this->assertEquals($low_max_results->count(), 5);
+            $this->assertEquals($high_max_results->count(), 13);
+
+            $this->assertEquals(\count($low_max_query->getResources()), 1);
+            $this->assertEquals(\count($high_max_query->getResources()), 2);
+        } catch (LdapException $exc) {
+            $this->markTestSkipped('Test LDAP server does not support pagination');
+        }
+
+        $this->destroyEntries($ldap, $entries);
     }
 }
