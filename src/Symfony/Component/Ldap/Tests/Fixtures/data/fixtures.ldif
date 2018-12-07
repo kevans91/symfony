@@ -25,7 +25,3 @@ ou: Ldap
 dn: ou=Ldap scoping,ou=Ldap,ou=Components,dc=symfony,dc=com
 objectclass: organizationalunit
 ou: Ldap scoping
-
-dn: ou=Users,dc=symfony,dc=com
-objectclass: organizationalunit
-ou: Users
