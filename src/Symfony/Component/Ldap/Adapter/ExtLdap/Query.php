@@ -21,6 +21,7 @@ use Symfony\Component\Ldap\Exception\NotBoundException;
  */
 class Query extends AbstractQuery
 {
+    // As of PHP 7.2, we can use LDAP_CONTROL_PAGEDRESULTS instead of this
     const PAGINATION_OID = '1.2.840.113556.1.4.319';
 
     /** @var Connection */
@@ -84,6 +85,9 @@ class Query extends AbstractQuery
 
             $itemsLeft = $maxItems = $this->options['maxItems'];
             $pageSize = $this->options['pageSize'];
+            // Deal with the logic to handle maxItems properly. If we can satisfy it in
+            // one request based on pageSize, we don't need to bother sending page control
+            // to the server so that it can determine what we already know.
             if (0 !== $maxItems && $pageSize > $maxItems) {
                 $pageSize = 0;
             } elseif (0 !== $maxItems) {
@@ -153,9 +157,9 @@ class Query extends AbstractQuery
     {
         if (null === $this->results || $idx >= \count($this->results)) {
             return null;
-        } else {
-            return $this->results[$idx];
         }
+
+        return $this->results[$idx];
     }
 
     /**
@@ -179,11 +183,17 @@ class Query extends AbstractQuery
     {
         $con = $this->connection->getResource();
         ldap_control_paged_result($con, 0);
-        // This is a bit of a hack-around. The PHP LDAP extension should likely be
-        // unsetting this OID when we send the above 0-sized page request. Not
-        // unsetting this OID results in future non-paged requests failing silently
-        // by returning 0 results or some subset of the actual results that should
-        // have been returned.
+
+        // This is a workaround for a bit of a bug in the above invocation
+        // of ldap_control_paged_result. Instead of indicating to extldap that
+        // we no longer wish to page queries on this link, this invocation sets
+        // the LDAP_CONTROL_PAGEDRESULTS OID with a page size of 0. This isn't
+        // well defined by RFC 2696 if there is no cookie present, so some servers
+        // will interpret it differently and do the wrong thing. Forcefully remove
+        // the OID for now until a fix can make its way through the versions of PHP
+        // the we support.
+        //
+        // This is not supported in PHP < 7.2, so these versions will remain broken.
         $ctl = array();
         ldap_get_option($con, LDAP_OPT_SERVER_CONTROLS, $ctl);
         if (!empty($ctl)) {
