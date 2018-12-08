@@ -137,28 +137,34 @@ class AdapterTest extends LdapTestCase
             'pageSize' => 5,
         ));
 
-        // This last query is to ensure that we haven't botched the state of our connection by not resetting pagination properly
-        $final_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=applicationProcess)(cn=user*))', array(
-            'scope' => Query::SCOPE_ONE,
-        ));
-
         try {
             $unpaged_results = $unpaged_query->execute();
             $fully_paged_results = $fully_paged_query->execute();
             $paged_results = $paged_query->execute();
-            $final_results = $final_query->execute();
 
             // All four of the above queries should result in the 25 'users' being returned
             $this->assertEquals($unpaged_results->count(), 25);
             $this->assertEquals($fully_paged_results->count(), 25);
             $this->assertEquals($paged_results->count(), 25);
-            $this->assertEquals($final_results->count(), 25);
 
             // They should also result in 1 or 25 / pageSize results
             $this->assertEquals(\count($unpaged_query->getResources()), 1);
             $this->assertEquals(\count($fully_paged_query->getResources()), 1);
             $this->assertEquals(\count($paged_query->getResources()), 5);
-            $this->assertEquals(\count($final_query->getResources()), 1);
+
+            if (PHP_MAJOR_VERSION > 7 || (PHP_MAJOR_VERSION == 7 && PHP_MINOR_VERSION >= 2) {
+                // This last query is to ensure that we haven't botched the state of our connection
+                // by not resetting pagination properly. extldap <= PHP 7.1 do not implement the necessary
+                // bits to work around an implementation flaw, so we simply can't guarantee this to work there.
+                $final_query = $ldap->createQuery('dc=symfony,dc=com', '(&(objectClass=applicationProcess)(cn=user*))', array(
+                    'scope' => Query::SCOPE_ONE,
+                ));
+
+                $final_results = $final_query->execute();
+
+                $this->assertEquals($final_results->count(), 25);
+                $this->assertEquals(\count($final_query->getResources()), 1);
+            }
         } catch (LdapException $exc) {
             $this->markTestSkipped('Test LDAP server does not support pagination');
         }
